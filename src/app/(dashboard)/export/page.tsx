@@ -277,11 +277,17 @@ export default function ExportPage() {
       } else if (format === "excel") {
         const XLSX = await import("xlsx");
 
-        // Attendance sheet with info header
+        // Attendance sheet with info header + summary at bottom
         const sheetData = [
           ...infoRows,
           header,
           ...rows,
+          [],
+          ["Summary"],
+          ["Total Students", String(total)],
+          ["Present", String(present)],
+          ["Absent", String(absent)],
+          ["Attendance %", `${percentage}%`],
         ];
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
         ws["!cols"] = [
@@ -334,8 +340,6 @@ export default function ExportPage() {
         doc.text(`Class: ${meta.className}`, 14, infoY);
         infoY += 6;
         doc.text(`Date: ${meta.date}  |  Time: ${meta.time}`, 14, infoY);
-        infoY += 6;
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, infoY);
         infoY += 6;
 
         autoTable(doc, {
@@ -592,8 +596,6 @@ export default function ExportPage() {
           doc.text(`Class: ${meta.className}`, 14, iy);
           iy += 6;
           doc.text(`Date: ${meta.date}  |  Time: ${meta.time}`, 14, iy);
-          iy += 6;
-          doc.text(`Generated: ${new Date().toLocaleString()}`, 14, iy);
           iy += 6;
 
           autoTable(doc, {
