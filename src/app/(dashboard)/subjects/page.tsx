@@ -59,7 +59,7 @@ export default function SubjectsPage() {
   const [deletingSubject, setDeletingSubject] = useState<Subject | null>(null);
 
   // Form state
-  const [formData, setFormData] = useState({ name: "", code: "" });
+  const [formData, setFormData] = useState({ name: "", code: "", section: "", className: "" });
   const [formLoading, setFormLoading] = useState(false);
 
   const { toast } = useToast();
@@ -117,10 +117,12 @@ export default function SubjectsPage() {
       await createSubject(user?.id ?? "local", {
         name: formData.name.trim(),
         code: formData.code.trim() || undefined,
+        section: formData.section.trim() || undefined,
+        className: formData.className.trim() || undefined,
       });
       toast({ title: "Success", description: "Subject added successfully" });
       setAddDialogOpen(false);
-      setFormData({ name: "", code: "" });
+      setFormData({ name: "", code: "", section: "", className: "" });
       loadSubjects();
     } catch (error) {
       toast({
@@ -143,10 +145,12 @@ export default function SubjectsPage() {
       await updateSubject(editingSubject.id, {
         name: formData.name.trim(),
         code: formData.code.trim() || undefined,
+        section: formData.section.trim() || undefined,
+        className: formData.className.trim() || undefined,
       });
       toast({ title: "Success", description: "Subject updated successfully" });
       setEditingSubject(null);
-      setFormData({ name: "", code: "" });
+      setFormData({ name: "", code: "", section: "", className: "" });
       loadSubjects();
     } catch {
       toast({
@@ -267,6 +271,11 @@ export default function SubjectsPage() {
                         {subject.code}
                       </p>
                     )}
+                    {(subject.section || subject.className) && (
+                      <p className="text-xs text-muted-foreground">
+                        {[subject.section && `Section: ${subject.section}`, subject.className && `Class: ${subject.className}`].filter(Boolean).join(" • ")}
+                      </p>
+                    )}
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -284,6 +293,8 @@ export default function SubjectsPage() {
                           setFormData({
                             name: subject.name,
                             code: subject.code || "",
+                            section: subject.section || "",
+                            className: subject.className || "",
                           });
                           setEditingSubject(subject);
                         }}
@@ -344,6 +355,26 @@ export default function SubjectsPage() {
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="section">Section (optional)</Label>
+                <Input
+                  id="section"
+                  placeholder="e.g., A"
+                  value={formData.section}
+                  onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="className">Class (optional)</Label>
+                <Input
+                  id="className"
+                  placeholder="e.g., CSE 3rd Year"
+                  value={formData.className}
+                  onChange={(e) => setFormData({ ...formData, className: e.target.value })}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
@@ -385,6 +416,26 @@ export default function SubjectsPage() {
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-section">Section (optional)</Label>
+                <Input
+                  id="edit-section"
+                  placeholder="e.g., A"
+                  value={formData.section}
+                  onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-className">Class (optional)</Label>
+                <Input
+                  id="edit-className"
+                  placeholder="e.g., CSE 3rd Year"
+                  value={formData.className}
+                  onChange={(e) => setFormData({ ...formData, className: e.target.value })}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

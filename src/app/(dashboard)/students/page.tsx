@@ -103,7 +103,7 @@ export default function StudentsPage() {
   const [dataCreatorOpen, setDataCreatorOpen] = useState(false);
 
   // Form state
-  const [formData, setFormData] = useState({ name: "", roll: "" });
+  const [formData, setFormData] = useState({ name: "", roll: "", section: "", department: "" });
   const [formLoading, setFormLoading] = useState(false);
 
   const { selectedIds, toggleSelection, clearSelection } = useStudentsStore();
@@ -185,10 +185,12 @@ export default function StudentsPage() {
       await createStudent(user.id, {
         name: formData.name.trim(),
         roll: Number(formData.roll),
+        section: formData.section.trim() || undefined,
+        department: formData.department.trim() || undefined,
       });
       toast({ title: "Success", description: "Student added successfully" });
       setAddDialogOpen(false);
-      setFormData({ name: "", roll: "" });
+      setFormData({ name: "", roll: "", section: "", department: "" });
       loadStudents();
     } catch (error) {
       toast({
@@ -477,10 +479,12 @@ export default function StudentsPage() {
       await updateStudent(editingStudent.id, {
         name: formData.name.trim(),
         roll: Number(formData.roll),
+        section: formData.section.trim() || undefined,
+        department: formData.department.trim() || undefined,
       });
       toast({ title: "Success", description: "Student updated successfully" });
       setEditingStudent(null);
-      setFormData({ name: "", roll: "" });
+      setFormData({ name: "", roll: "", section: "", department: "" });
       loadStudents();
     } catch {
       toast({
@@ -745,7 +749,7 @@ export default function StudentsPage() {
                         <DropdownMenuContent align="end" className="z-[60]">
                           <DropdownMenuItem
                             onClick={() => {
-                              setFormData({ name: student.name, roll: String(student.roll) });
+                              setFormData({ name: student.name, roll: String(student.roll), section: student.section || "", department: student.department || "" });
                               setEditingStudent(student);
                             }}
                           >
@@ -799,6 +803,26 @@ export default function StudentsPage() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="section">Section (optional)</Label>
+                <Input
+                  id="section"
+                  placeholder="e.g., A"
+                  value={formData.section}
+                  onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="department">Department (optional)</Label>
+                <Input
+                  id="department"
+                  placeholder="e.g., CSE"
+                  value={formData.department}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
@@ -840,6 +864,26 @@ export default function StudentsPage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-section">Section (optional)</Label>
+                <Input
+                  id="edit-section"
+                  placeholder="e.g., A"
+                  value={formData.section}
+                  onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-department">Department (optional)</Label>
+                <Input
+                  id="edit-department"
+                  placeholder="e.g., CSE"
+                  value={formData.department}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

@@ -3,6 +3,8 @@ export interface Subject {
   ownerId: string;
   name: string;
   code?: string;
+  section?: string;
+  className?: string;
   teacherName?: string;
   createdAt: string;
   updatedAt: string;
@@ -12,6 +14,8 @@ export interface Subject {
 export interface CreateSubjectInput {
   name: string;
   code?: string;
+  section?: string;
+  className?: string;
   teacherName?: string;
 }
 

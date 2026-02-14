@@ -14,6 +14,8 @@ export async function createSubject(
     ownerId,
     name: data.name,
     code: data.code ?? "",
+    section: data.section ?? "",
+    className: data.className ?? "",
     teacherName: data.teacherName ?? "",
     createdAt: now,
     updatedAt: now,

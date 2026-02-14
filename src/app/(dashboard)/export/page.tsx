@@ -15,6 +15,8 @@ import {
   BookOpen,
   CalendarDays,
   ClipboardList,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +33,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { db } from "@/lib/db";
 import type { LocalAttendance } from "@/lib/db/index";
 import type { Subject } from "@/lib/types/subject";
@@ -53,6 +62,7 @@ export default function ExportPage() {
   const [loading, setLoading] = useState(true);
   const [filterSubjectId, setFilterSubjectId] = useState<string>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [whatsappRecord, setWhatsappRecord] = useState<LocalAttendance | null>(null);
 
   const { toast } = useToast();
   const { user } = useAuthStore();
@@ -142,6 +152,43 @@ export default function ExportPage() {
     [studentSortOption, studentMap]
   );
 
+  /** Derive section & class from subject first, fall back to students */
+  const getRecordMeta = useCallback(
+    (record: LocalAttendance) => {
+      const subject = subjectMap.get(record.subjectId);
+
+      // Prefer subject-level section/class, fall back to student-level
+      let sectionStr = subject?.section || "";
+      let classStr = subject?.className || "";
+
+      if (!sectionStr || !classStr) {
+        const sections = new Set<string>();
+        const classes = new Set<string>();
+        for (const entry of record.records) {
+          const student = studentMap.get(entry.studentId);
+          if (student?.section) sections.add(student.section);
+          if (student?.department) classes.add(student.department);
+        }
+        if (!sectionStr && sections.size > 0) sectionStr = Array.from(sections).join(", ");
+        if (!classStr && classes.size > 0) classStr = Array.from(classes).join(", ");
+      }
+
+      return {
+        subjectName: subject?.name || "Unknown",
+        subjectCode: subject?.code || "",
+        section: sectionStr || "—",
+        className: classStr || "—",
+        date: formatDate(record.date, "EEEE, MMM d, yyyy"),
+        time: record.updatedAt
+          ? formatDate(record.updatedAt, "h:mm a")
+          : record.createdAt
+            ? formatDate(record.createdAt, "h:mm a")
+            : "—",
+      };
+    },
+    [subjectMap, studentMap]
+  );
+
   const buildExportRows = useCallback(
     (record: LocalAttendance) => {
       const subject = subjectMap.get(record.subjectId);
@@ -178,10 +225,9 @@ export default function ExportPage() {
   function handleExport(record: LocalAttendance, format: ExportFormat) {
     (async () => {
     try {
-      const subject = subjectMap.get(record.subjectId);
+      const meta = getRecordMeta(record);
       const dateStr = formatDate(record.date, "yyyy-MM-dd");
-      const subjectName = subject?.name || "Unknown";
-      const safeSubject = subjectName.replace(/[^a-zA-Z0-9]/g, "-");
+      const safeSubject = meta.subjectName.replace(/[^a-zA-Z0-9]/g, "-");
       const baseName = `attendance-${safeSubject}-${dateStr}`;
       const header = ["Roll", "Name", "Subject", "Date", "Status"];
       const rows = buildExportRows(record);
@@ -197,6 +243,17 @@ export default function ExportPage() {
 
       const { present, absent, total, percentage } = record.summary;
 
+      // Common info header rows for CSV / Excel
+      const infoRows: string[][] = [
+        ["Subject", meta.subjectName],
+        ...(meta.subjectCode ? [["Code", meta.subjectCode]] : []),
+        ["Section", meta.section],
+        ["Class", meta.className],
+        ["Date", meta.date],
+        ["Time", meta.time],
+        [],
+      ];
+
       if (format === "csv") {
         const escapeCSV = (value: string) => {
           if (
@@ -208,10 +265,10 @@ export default function ExportPage() {
           }
           return value;
         };
-        const allRows = [header, ...rows];
+        const allRows = [...infoRows, header, ...rows];
         allRows.push([]);
         allRows.push(["Summary"]);
-        allRows.push(["Total", String(total)]);
+        allRows.push(["Total Students", String(total)]);
         allRows.push(["Present", String(present)]);
         allRows.push(["Absent", String(absent)]);
         allRows.push(["Attendance %", `${percentage}%`]);
@@ -219,12 +276,19 @@ export default function ExportPage() {
         downloadFile(csv, `${baseName}.csv`, "text/csv");
       } else if (format === "excel") {
         const XLSX = await import("xlsx");
-        const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+
+        // Attendance sheet with info header
+        const sheetData = [
+          ...infoRows,
+          header,
+          ...rows,
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
         ws["!cols"] = [
-          { wch: 8 },
+          { wch: 14 },
           { wch: 25 },
           { wch: 20 },
-          { wch: 14 },
+          { wch: 18 },
           { wch: 10 },
         ];
         const wb = XLSX.utils.book_new();
@@ -233,8 +297,13 @@ export default function ExportPage() {
         const statsData = [
           ["Attendance Summary"],
           [""],
-          ["Subject", subjectName],
-          ["Date", formatDate(record.date)],
+          ["Subject", meta.subjectName],
+          ...(meta.subjectCode ? [["Code", meta.subjectCode]] : []),
+          ["Section", meta.section],
+          ["Class", meta.className],
+          ["Date", meta.date],
+          ["Time", meta.time],
+          [""],
           ["Total Students", String(total)],
           ["Present", String(present)],
           ["Absent", String(absent)],
@@ -257,14 +326,22 @@ export default function ExportPage() {
 
         doc.setFontSize(10);
         doc.setTextColor(100);
-        doc.text(`Subject: ${subjectName}`, 14, 28);
-        doc.text(`Date: ${formatDate(record.date)}`, 14, 34);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 40);
+        let infoY = 30;
+        doc.text(`Subject: ${meta.subjectName}${meta.subjectCode ? ` (${meta.subjectCode})` : ""}`, 14, infoY);
+        infoY += 6;
+        doc.text(`Section: ${meta.section}`, 14, infoY);
+        infoY += 6;
+        doc.text(`Class: ${meta.className}`, 14, infoY);
+        infoY += 6;
+        doc.text(`Date: ${meta.date}  |  Time: ${meta.time}`, 14, infoY);
+        infoY += 6;
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, infoY);
+        infoY += 6;
 
         autoTable(doc, {
           head: [header],
           body: rows,
-          startY: 48,
+          startY: infoY + 4,
           styles: { fontSize: 9 },
           headStyles: { fillColor: [23, 23, 23] },
           alternateRowStyles: { fillColor: [245, 245, 245] },
@@ -278,7 +355,7 @@ export default function ExportPage() {
         doc.setTextColor(0);
         doc.text("Summary", 14, finalY + 15);
         doc.setFontSize(10);
-        doc.text(`Total: ${total}`, 14, finalY + 24);
+        doc.text(`Total Students: ${total}`, 14, finalY + 24);
         doc.text(`Present: ${present}`, 14, finalY + 31);
         doc.text(`Absent: ${absent}`, 14, finalY + 38);
         doc.text(`Attendance: ${percentage}%`, 14, finalY + 45);
@@ -300,44 +377,57 @@ export default function ExportPage() {
     })();
   }
 
-  function handleWhatsAppShare(record: LocalAttendance) {
+  function openWhatsAppDialog(record: LocalAttendance) {
+    setWhatsappRecord(record);
+  }
+
+  function handleWhatsAppShare(type: "present" | "absent") {
+    if (!whatsappRecord) return;
     try {
-      const subject = subjectMap.get(record.subjectId);
-      const subjectName = subject?.name || "Unknown";
-      const { present, total, percentage } = record.summary;
+      const record = whatsappRecord;
+      const meta = getRecordMeta(record);
+      const { present, absent, total, percentage } = record.summary;
 
       const sorted = sortRecordEntries(record.records);
-      const presentStudents = sorted.filter(
-        (r) => r.status === "present"
-      );
-      const absentStudents = sorted.filter(
-        (r) => r.status === "absent"
-      );
 
       let message = `*ATTENDANCE REPORT*\n`;
-      message += `Subject: *${subjectName}*\n`;
-      message += `Date: ${formatDate(record.date)}\n`;
+      message += `Subject: *${meta.subjectName}*\n`;
+      if (meta.subjectCode) message += `Code: ${meta.subjectCode}\n`;
+      message += `Section: ${meta.section}\n`;
+      message += `Class: ${meta.className}\n`;
+      message += `Date: ${meta.date}\n`;
+      message += `Time: ${meta.time}\n`;
       message += `---\n\n`;
 
-      if (absentStudents.length > 0) {
-        message += `*ABSENT (${absentStudents.length}):*\n`;
-        absentStudents.forEach((s, i) => {
-          message += `${i + 1}. ${s.name} (${s.roll})\n`;
-        });
-        message += `\n`;
+      if (type === "absent") {
+        const absentStudents = sorted.filter((r) => r.status === "absent");
+        if (absentStudents.length > 0) {
+          message += `*ABSENT STUDENTS (${absentStudents.length}):*\n`;
+          absentStudents.forEach((s, i) => {
+            message += `${i + 1}. ${s.name} (Roll: ${s.roll})\n`;
+          });
+        } else {
+          message += `_No absent students_\n`;
+        }
+      } else {
+        const presentStudents = sorted.filter((r) => r.status === "present");
+        if (presentStudents.length > 0) {
+          message += `*PRESENT STUDENTS (${presentStudents.length}):*\n`;
+          presentStudents.forEach((s, i) => {
+            message += `${i + 1}. ${s.name} (Roll: ${s.roll})\n`;
+          });
+        } else {
+          message += `_No present students_\n`;
+        }
       }
 
-      if (presentStudents.length > 0) {
-        message += `*PRESENT (${presentStudents.length}):*\n`;
-        presentStudents.forEach((s, i) => {
-          message += `${i + 1}. ${s.name} (${s.roll})\n`;
-        });
-        message += `\n`;
-      }
-
-      message += `*Summary:* ${present}/${total} Present (${percentage}%)`;
+      message += `\n*Summary:*\n`;
+      message += `Total Students: ${total}\n`;
+      message += `Present: ${present} | Absent: ${absent}\n`;
+      message += `Attendance: ${percentage}%`;
 
       const encodedMessage = encodeURIComponent(message);
+      setWhatsappRecord(null);
       window.open(`https://wa.me/?text=${encodedMessage}`, "_blank");
     } catch {
       toast({
@@ -345,6 +435,7 @@ export default function ExportPage() {
         description: "Failed to generate WhatsApp message",
         variant: "destructive",
       });
+      setWhatsappRecord(null);
     }
   }
 
@@ -388,12 +479,22 @@ export default function ExportPage() {
             : v;
         const csvRows: string[][] = [];
         for (const record of filteredRecords) {
-          const subject = subjectMap.get(record.subjectId);
-          csvRows.push([`Report: ${subject?.name || "Unknown"} - ${formatDate(record.date)}`]);
+          const meta = getRecordMeta(record);
+          csvRows.push(["Subject", meta.subjectName]);
+          if (meta.subjectCode) csvRows.push(["Code", meta.subjectCode]);
+          csvRows.push(["Section", meta.section]);
+          csvRows.push(["Class", meta.className]);
+          csvRows.push(["Date", meta.date]);
+          csvRows.push(["Time", meta.time]);
+          csvRows.push([]);
           csvRows.push(header);
           csvRows.push(...buildExportRows(record));
           csvRows.push([]);
-          csvRows.push(["Present", String(record.summary.present), "Absent", String(record.summary.absent), `${record.summary.percentage}%`]);
+          csvRows.push(["Summary"]);
+          csvRows.push(["Total Students", String(record.summary.total)]);
+          csvRows.push(["Present", String(record.summary.present)]);
+          csvRows.push(["Absent", String(record.summary.absent)]);
+          csvRows.push(["Attendance %", `${record.summary.percentage}%`]);
           csvRows.push([]);
           csvRows.push([]);
         }
@@ -401,6 +502,7 @@ export default function ExportPage() {
         csvRows.push(["Total Records", String(totalStudents)]);
         csvRows.push(["Present", String(totalPresent)]);
         csvRows.push(["Absent", String(totalAbsent)]);
+        csvRows.push(["Overall %", `${totalStudents > 0 ? ((totalPresent / totalStudents) * 100).toFixed(1) : 0}%`]);
         const csv = csvRows.map((r) => r.map(escapeCSV).join(",")).join("\n");
         downloadFile(csv, `${baseName}.csv`, "text/csv");
       } else if (format === "excel") {
@@ -420,17 +522,27 @@ export default function ExportPage() {
           }
           usedNames.add(sheetName);
 
+          const meta = getRecordMeta(record);
           const rows = buildExportRows(record);
-          const sheetData = [
-            [`Attendance: ${subName} — ${formatDate(record.date)}`],
+          const sheetData: string[][] = [
+            ["Subject", meta.subjectName],
+            ...(meta.subjectCode ? [["Code", meta.subjectCode]] : []),
+            ["Section", meta.section],
+            ["Class", meta.className],
+            ["Date", meta.date],
+            ["Time", meta.time],
             [],
             header,
             ...rows,
             [],
-            ["Present", String(record.summary.present), "Absent", String(record.summary.absent), `${record.summary.percentage}%`],
+            ["Summary"],
+            ["Total Students", String(record.summary.total)],
+            ["Present", String(record.summary.present)],
+            ["Absent", String(record.summary.absent)],
+            ["Attendance %", `${record.summary.percentage}%`],
           ];
           const ws = XLSX.utils.aoa_to_sheet(sheetData);
-          ws["!cols"] = [{ wch: 12 }, { wch: 25 }, { wch: 20 }, { wch: 14 }, { wch: 10 }];
+          ws["!cols"] = [{ wch: 14 }, { wch: 25 }, { wch: 20 }, { wch: 18 }, { wch: 10 }];
           XLSX.utils.book_append_sheet(wb, ws, sheetName);
         }
 
@@ -462,8 +574,7 @@ export default function ExportPage() {
           if (!isFirstPage) doc.addPage();
           isFirstPage = false;
 
-          const subject = subjectMap.get(record.subjectId);
-          const subName = subject?.name || "Unknown";
+          const meta = getRecordMeta(record);
           const rows = buildExportRows(record);
           const { present, absent, total, percentage } = record.summary;
 
@@ -473,14 +584,22 @@ export default function ExportPage() {
 
           doc.setFontSize(10);
           doc.setTextColor(100);
-          doc.text(`Subject: ${subName}`, 14, 28);
-          doc.text(`Date: ${formatDate(record.date)}`, 14, 34);
-          doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 40);
+          let iy = 30;
+          doc.text(`Subject: ${meta.subjectName}${meta.subjectCode ? ` (${meta.subjectCode})` : ""}`, 14, iy);
+          iy += 6;
+          doc.text(`Section: ${meta.section}`, 14, iy);
+          iy += 6;
+          doc.text(`Class: ${meta.className}`, 14, iy);
+          iy += 6;
+          doc.text(`Date: ${meta.date}  |  Time: ${meta.time}`, 14, iy);
+          iy += 6;
+          doc.text(`Generated: ${new Date().toLocaleString()}`, 14, iy);
+          iy += 6;
 
           autoTable(doc, {
             head: [header],
             body: rows,
-            startY: 48,
+            startY: iy + 4,
             styles: { fontSize: 9 },
             headStyles: { fillColor: [23, 23, 23] },
             alternateRowStyles: { fillColor: [245, 245, 245] },
@@ -675,7 +794,7 @@ export default function ExportPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30"
-                              onClick={() => handleWhatsAppShare(record)}
+                              onClick={() => openWhatsAppDialog(record)}
                               title="Share via WhatsApp"
                             >
                               <MessageCircle className="h-4 w-4" />
@@ -779,6 +898,51 @@ export default function ExportPage() {
           ))}
         </div>
       )}
+      {/* WhatsApp Share Dialog */}
+      <Dialog open={!!whatsappRecord} onOpenChange={(open) => { if (!open) setWhatsappRecord(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-green-600" />
+              Share via WhatsApp
+            </DialogTitle>
+            <DialogDescription>
+              Choose which students to include in the WhatsApp message.
+              {whatsappRecord && (() => {
+                const subj = subjectMap.get(whatsappRecord.subjectId);
+                const { present, absent, total, percentage } = whatsappRecord.summary;
+                return (
+                  <span className="block mt-2 text-xs text-muted-foreground">
+                    {subj?.name || "Unknown"} — {formatDate(whatsappRecord.date)} — {total} students ({present}P / {absent}A — {percentage}%)
+                  </span>
+                );
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button
+              onClick={() => handleWhatsAppShare("present")}
+              className="flex flex-col items-center gap-2 rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 transition-colors hover:bg-green-100 dark:hover:bg-green-900/40 hover:border-green-400 dark:hover:border-green-600"
+            >
+              <UserCheck className="h-8 w-8 text-green-600 dark:text-green-400" />
+              <span className="text-sm font-semibold text-green-700 dark:text-green-300">Present Students</span>
+              {whatsappRecord && (
+                <span className="text-xs text-green-600 dark:text-green-400">{whatsappRecord.summary.present} students</span>
+              )}
+            </button>
+            <button
+              onClick={() => handleWhatsAppShare("absent")}
+              className="flex flex-col items-center gap-2 rounded-lg border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 transition-colors hover:bg-red-100 dark:hover:bg-red-900/40 hover:border-red-400 dark:hover:border-red-600"
+            >
+              <UserX className="h-8 w-8 text-red-500 dark:text-red-400" />
+              <span className="text-sm font-semibold text-red-700 dark:text-red-300">Absent Students</span>
+              {whatsappRecord && (
+                <span className="text-xs text-red-500 dark:text-red-400">{whatsappRecord.summary.absent} students</span>
+              )}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
