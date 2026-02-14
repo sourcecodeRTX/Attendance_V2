@@ -52,7 +52,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { db } from "@/lib/db";
 import { createStudent, updateStudent, deleteStudent, importStudents, restoreStudent } from "@/lib/db/students";
 import type { Student, CreateStudentInput, ImportResult } from "@/lib/types/student";
-import type { StudentSortOption } from "@/lib/types/student";
 import { useStudentsStore } from "@/lib/stores/students-store";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { useUIStore } from "@/lib/stores/ui-store";

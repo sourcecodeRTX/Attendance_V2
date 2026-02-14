@@ -358,7 +358,7 @@ export default function AttendancePage() {
         <div className="max-h-[50vh] min-h-[300px] overflow-auto">
           <CardContent className="space-y-2 pt-0">
             {(() => {
-              let sorted = [...students];
+              const sorted = [...students];
               switch (studentSortOption) {
                 case "ascending":
                   sorted.sort((a, b) => a.roll - b.roll);
