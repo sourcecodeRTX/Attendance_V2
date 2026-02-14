@@ -2,11 +2,13 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { StudentSortOption } from "@/lib/types/student";
 
 interface UIState {
   sidebarCollapsed: boolean;
   mobileNavOpen: boolean;
   soundEnabled: boolean;
+  studentSortOption: StudentSortOption;
   
   // Actions
   toggleSidebar: () => void;
@@ -14,6 +16,7 @@ interface UIState {
   setMobileNavOpen: (open: boolean) => void;
   toggleSound: () => void;
   setSoundEnabled: (enabled: boolean) => void;
+  setStudentSortOption: (option: StudentSortOption) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -22,6 +25,7 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       mobileNavOpen: false,
       soundEnabled: true,
+      studentSortOption: "ascending" as StudentSortOption,
 
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
@@ -37,12 +41,16 @@ export const useUIStore = create<UIState>()(
 
       setSoundEnabled: (enabled: boolean) =>
         set({ soundEnabled: enabled }),
+
+      setStudentSortOption: (option: StudentSortOption) =>
+        set({ studentSortOption: option }),
     }),
     {
       name: "ui-storage",
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         soundEnabled: state.soundEnabled,
+        studentSortOption: state.studentSortOption,
       }),
     }
   )

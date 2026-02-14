@@ -12,6 +12,11 @@ import {
   Users,
   FileSpreadsheet,
   CheckCircle,
+  ArrowUpDown,
+  Check,
+  ArrowUpAZ,
+  ArrowDownAZ,
+  ListOrdered,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,8 +52,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { db } from "@/lib/db";
 import { createStudent, updateStudent, deleteStudent, importStudents, restoreStudent } from "@/lib/db/students";
 import type { Student, CreateStudentInput, ImportResult } from "@/lib/types/student";
+import type { StudentSortOption } from "@/lib/types/student";
 import { useStudentsStore } from "@/lib/stores/students-store";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { useUIStore } from "@/lib/stores/ui-store";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import { LoadingSpinner, LoadingScreen } from "@/components/shared/loading-spinner";
@@ -102,6 +109,7 @@ export default function StudentsPage() {
 
   const { selectedIds, toggleSelection, clearSelection } = useStudentsStore();
   const { user } = useAuthStore();
+  const { studentSortOption, setStudentSortOption } = useUIStore();
   const selectedStudents = Array.from(selectedIds);
   const { toast } = useToast();
 
@@ -117,8 +125,7 @@ export default function StudentsPage() {
         .equals(user.id)
         .filter((s) => !s.isDeleted)
         .toArray();
-      // Sort by roll in memory to avoid index issues
-      data.sort((a, b) => a.roll - b.roll);
+      // Don't sort here - sorting is handled by the sort preference
       setStudents(data);
     } catch (error) {
       console.error("Failed to load students:", error);
@@ -133,14 +140,27 @@ export default function StudentsPage() {
   }
 
   const filteredStudents = useMemo(() => {
-    if (!debouncedSearch) return students;
-    const query = debouncedSearch.toLowerCase();
-    return students.filter(
-      (s) =>
-        s.name.toLowerCase().includes(query) ||
-        String(s.roll).includes(query)
-    );
-  }, [students, debouncedSearch]);
+    let result = students;
+    if (debouncedSearch) {
+      const query = debouncedSearch.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.name.toLowerCase().includes(query) ||
+          String(s.roll).includes(query)
+      );
+    }
+    // Apply sort based on user preference
+    switch (studentSortOption) {
+      case "ascending":
+        return [...result].sort((a, b) => a.roll - b.roll);
+      case "descending":
+        return [...result].sort((a, b) => b.roll - a.roll);
+      case "original":
+        return [...result].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      default:
+        return result;
+    }
+  }, [students, debouncedSearch, studentSortOption]);
 
   async function handleAddStudent() {
     if (!formData.name.trim() || !formData.roll.trim()) {
@@ -604,6 +624,35 @@ export default function StudentsPage() {
             className="pl-9"
           />
         </div>
+        {/* Sort Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="default" className="gap-2 shrink-0">
+              <ArrowUpDown className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                {studentSortOption === "ascending" ? "Ascending" : studentSortOption === "descending" ? "Descending" : "Original Order"}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setStudentSortOption("ascending")}>
+              <ArrowUpAZ className="mr-2 h-4 w-4" />
+              Ascending (Roll)
+              {studentSortOption === "ascending" && <Check className="ml-auto h-4 w-4" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStudentSortOption("descending")}>
+              <ArrowDownAZ className="mr-2 h-4 w-4" />
+              Descending (Roll)
+              {studentSortOption === "descending" && <Check className="ml-auto h-4 w-4" />}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setStudentSortOption("original")}>
+              <ListOrdered className="mr-2 h-4 w-4" />
+              Original File Order
+              {studentSortOption === "original" && <Check className="ml-auto h-4 w-4" />}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         {selectedStudents.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">

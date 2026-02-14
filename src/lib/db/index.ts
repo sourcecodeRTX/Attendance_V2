@@ -54,6 +54,30 @@ class AttendanceDatabase extends Dexie {
       attendance: "id, subjectId, ownerId, date, pendingSync",
       syncQueue: "++id, type, collection, createdAt",
     });
+
+    // Version 3: Add sortOrder field to students for original import order
+    this.version(3).stores({
+      users: "id",
+      students: "id, ownerId, [ownerId+roll], roll, sortOrder, pendingSync",
+      subjects: "id, ownerId, name, pendingSync",
+      attendance: "id, subjectId, ownerId, date, pendingSync",
+      syncQueue: "++id, type, collection, createdAt",
+    }).upgrade(async (tx) => {
+      // Assign sortOrder to existing students based on their current roll order
+      const students = await tx.table("students").toArray();
+      const byOwner = new Map<string, typeof students>();
+      for (const s of students) {
+        const list = byOwner.get(s.ownerId) || [];
+        list.push(s);
+        byOwner.set(s.ownerId, list);
+      }
+      for (const [, list] of byOwner) {
+        list.sort((a: { roll: number }, b: { roll: number }) => a.roll - b.roll);
+        for (let i = 0; i < list.length; i++) {
+          await tx.table("students").update(list[i].id, { sortOrder: i });
+        }
+      }
+    });
   }
 }
 

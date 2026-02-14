@@ -5,10 +5,13 @@ export interface Student {
   name: string;
   section?: string;
   department?: string;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
   isDeleted: boolean;
 }
+
+export type StudentSortOption = "ascending" | "descending" | "original";
 
 export interface CreateStudentInput {
   roll: number;

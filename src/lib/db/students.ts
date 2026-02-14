@@ -2,9 +2,16 @@ import { db, type LocalStudent, generateUUID } from "./index";
 import type { CreateStudentInput, ImportMode, ImportResult } from "@/lib/types/student";
 import { addToSyncQueue, triggerSync } from "./sync";
 
+async function getNextSortOrder(ownerId: string): Promise<number> {
+  const all = await db.students.where("ownerId").equals(ownerId).toArray();
+  if (all.length === 0) return 0;
+  return Math.max(...all.map((s) => s.sortOrder ?? 0)) + 1;
+}
+
 export async function createStudent(
   ownerId: string,
-  data: CreateStudentInput
+  data: CreateStudentInput,
+  sortOrder?: number
 ): Promise<LocalStudent> {
   const existing = await db.students
     .where("[ownerId+roll]")
@@ -17,6 +24,7 @@ export async function createStudent(
 
   const id = generateUUID();
   const now = new Date().toISOString();
+  const resolvedSortOrder = sortOrder ?? await getNextSortOrder(ownerId);
 
   const student: LocalStudent = {
     id,
@@ -25,6 +33,7 @@ export async function createStudent(
     name: data.name,
     section: data.section ?? "",
     department: data.department ?? "",
+    sortOrder: resolvedSortOrder,
     createdAt: now,
     updatedAt: now,
     isDeleted: false,
@@ -96,6 +105,9 @@ export async function importStudents(
   const existing = await db.students.where("ownerId").equals(ownerId).toArray();
   const existingByRoll = new Map(existing.map((s) => [s.roll, s]));
 
+  // Calculate base sortOrder for new students (preserves file/import order)
+  let nextSortOrder = existing.length === 0 ? 0 : Math.max(...existing.map((s) => s.sortOrder ?? 0)) + 1;
+
   for (const input of students) {
     try {
       const existingStudent = existingByRoll.get(input.roll);
@@ -121,7 +133,8 @@ export async function importStudents(
         }
       }
 
-      await createStudent(ownerId, input);
+      await createStudent(ownerId, input, nextSortOrder);
+      nextSortOrder++;
       results.added++;
     } catch (error) {
       results.errors.push({

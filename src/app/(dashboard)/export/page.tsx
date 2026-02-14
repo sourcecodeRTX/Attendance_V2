@@ -42,6 +42,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { cn } from "@/lib/utils/cn";
 import { formatDate } from "@/lib/utils/date";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { useUIStore } from "@/lib/stores/ui-store";
 
 type ExportFormat = "csv" | "excel" | "pdf";
 
@@ -55,6 +56,7 @@ export default function ExportPage() {
 
   const { toast } = useToast();
   const { user } = useAuthStore();
+  const { studentSortOption } = useUIStore();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -117,11 +119,35 @@ export default function ExportPage() {
     return Array.from(groups.entries());
   }, [filteredRecords]);
 
+  const sortRecordEntries = useCallback(
+    (entries: LocalAttendance["records"]) => {
+      const sorted = [...entries];
+      switch (studentSortOption) {
+        case "ascending":
+          sorted.sort((a, b) => a.roll - b.roll);
+          break;
+        case "descending":
+          sorted.sort((a, b) => b.roll - a.roll);
+          break;
+        case "original":
+          sorted.sort((a, b) => {
+            const studentA = studentMap.get(a.studentId);
+            const studentB = studentMap.get(b.studentId);
+            return (studentA?.sortOrder ?? 0) - (studentB?.sortOrder ?? 0);
+          });
+          break;
+      }
+      return sorted;
+    },
+    [studentSortOption, studentMap]
+  );
+
   const buildExportRows = useCallback(
     (record: LocalAttendance) => {
       const subject = subjectMap.get(record.subjectId);
       const rows: string[][] = [];
-      for (const entry of record.records) {
+      const sortedEntries = sortRecordEntries(record.records);
+      for (const entry of sortedEntries) {
         const student = studentMap.get(entry.studentId);
         if (!student) continue;
         rows.push([
@@ -134,7 +160,7 @@ export default function ExportPage() {
       }
       return rows;
     },
-    [subjectMap, studentMap]
+    [subjectMap, studentMap, sortRecordEntries]
   );
 
   function downloadFile(content: string, filename: string, mimeType: string) {
@@ -280,10 +306,11 @@ export default function ExportPage() {
       const subjectName = subject?.name || "Unknown";
       const { present, total, percentage } = record.summary;
 
-      const presentStudents = record.records.filter(
+      const sorted = sortRecordEntries(record.records);
+      const presentStudents = sorted.filter(
         (r) => r.status === "present"
       );
-      const absentStudents = record.records.filter(
+      const absentStudents = sorted.filter(
         (r) => r.status === "absent"
       );
 
@@ -709,9 +736,7 @@ export default function ExportPage() {
                                 Status
                               </span>
 
-                              {record.records
-                                .slice()
-                                .sort((a, b) => a.roll - b.roll)
+                              {sortRecordEntries(record.records)
                                 .map((entry) => (
                                   <div
                                     key={entry.studentId}

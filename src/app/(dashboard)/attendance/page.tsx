@@ -33,6 +33,7 @@ import type { Student } from "@/lib/types/student";
 import type { Subject } from "@/lib/types/subject";
 import type { AttendanceStatus, StudentAttendanceRecord } from "@/lib/types/attendance";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { useUIStore } from "@/lib/stores/ui-store";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/hooks/use-sound";
 import { LoadingSpinner, LoadingScreen } from "@/components/shared/loading-spinner";
@@ -44,6 +45,7 @@ export default function AttendancePage() {
   const { toast } = useToast();
   const { playPresent, playAbsent, isEnabled: soundEnabled } = useSound();
   const { user, updatePreferences } = useAuthStore();
+  const { studentSortOption } = useUIStore();
 
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -77,7 +79,7 @@ export default function AttendancePage() {
             .where("ownerId")
             .equals(user.id)
             .filter((st) => !st.isDeleted)
-            .sortBy("roll"),
+            .toArray(),
           db.subjects
             .where("ownerId")
             .equals(user.id)
@@ -355,7 +357,21 @@ export default function AttendancePage() {
         </CardHeader>
         <div className="max-h-[50vh] min-h-[300px] overflow-auto">
           <CardContent className="space-y-2 pt-0">
-            {students.map((student) => {
+            {(() => {
+              let sorted = [...students];
+              switch (studentSortOption) {
+                case "ascending":
+                  sorted.sort((a, b) => a.roll - b.roll);
+                  break;
+                case "descending":
+                  sorted.sort((a, b) => b.roll - a.roll);
+                  break;
+                case "original":
+                  sorted.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+                  break;
+              }
+              return sorted;
+            })().map((student) => {
               const status = attendance[student.id] || "present";
               const isPresent = status === "present";
               return (
