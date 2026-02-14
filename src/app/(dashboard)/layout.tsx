@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileNav, MobileBottomNav } from "@/components/layout/mobile-nav";
@@ -12,6 +13,11 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { sidebarCollapsed } = useUIStore();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -26,7 +32,7 @@ export default function DashboardLayout({
         className={cn(
           "transition-all duration-200",
           "md:pl-[260px]",
-          sidebarCollapsed && "md:pl-[72px]"
+          mounted && sidebarCollapsed && "md:pl-[72px]"
         )}
       >
         {/* Header */}

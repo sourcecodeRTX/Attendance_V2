@@ -52,6 +52,11 @@ export const useUIStore = create<UIState>()(
         soundEnabled: state.soundEnabled,
         studentSortOption: state.studentSortOption,
       }),
+      onRehydrateStorage: () => {
+        return () => {
+          // Store has rehydrated from localStorage
+        };
+      },
     }
   )
 );

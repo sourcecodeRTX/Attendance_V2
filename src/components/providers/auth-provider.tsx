@@ -26,50 +26,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const cachedUser = await db.users.get(firebaseUser.uid);
           
           if (cachedUser) {
+            // Set user immediately from cache - UI unblocks here
             setUser(cachedUser.data);
           }
 
-          // Always try to fetch fresh profile from Firestore (in background if cached)
-          try {
-            const userDoc = await getDoc(doc(firestore, "users", firebaseUser.uid));
-            if (userDoc.exists()) {
-              const userData = userDoc.data() as User;
-              setUser(userData);
-              await db.users.put({
-                id: firebaseUser.uid,
-                data: userData,
-                lastSynced: Date.now(),
-              });
-            } else if (!cachedUser) {
-              setUser(null);
-            }
-          } catch (fetchErr) {
-            console.warn("Failed to fetch fresh profile, using cache:", fetchErr);
-            if (!cachedUser) {
-              setUser(null);
-            }
-          }
-
-          // Auto-pull cloud data if local DB is empty
-          const [studentCount, subjectCount] = await Promise.all([
-            db.students.count(),
-            db.subjects.count(),
-          ]);
-
-          if (studentCount === 0 && subjectCount === 0) {
+          // Fetch fresh profile from Firestore (non-blocking for UI)
+          const freshFetch = async () => {
             try {
-              await pullFromCloud();
-            } catch (err) {
-              console.warn("Failed to pull cloud data:", err);
+              const userDoc = await getDoc(doc(firestore, "users", firebaseUser.uid));
+              if (userDoc.exists()) {
+                const userData = userDoc.data() as User;
+                setUser(userData);
+                await db.users.put({
+                  id: firebaseUser.uid,
+                  data: userData,
+                  lastSynced: Date.now(),
+                });
+              } else if (!cachedUser) {
+                setUser(null);
+              }
+            } catch (fetchErr) {
+              console.warn("Failed to fetch fresh profile, using cache:", fetchErr);
+              if (!cachedUser) {
+                setUser(null);
+              }
             }
+          };
+
+          // If no cache, we must wait for Firestore to get user data
+          if (!cachedUser) {
+            await freshFetch();
           } else {
-            // Process any pending sync queue items
-            try {
-              await processSyncQueue();
-            } catch (err) {
-              console.warn("Failed to process sync queue:", err);
-            }
+            // If cached, fetch fresh data in background (don't block UI)
+            freshFetch();
           }
+
+          // Background sync - never block the UI for this
+          const backgroundSync = async () => {
+            try {
+              const [studentCount, subjectCount] = await Promise.all([
+                db.students.count(),
+                db.subjects.count(),
+              ]);
+
+              if (studentCount === 0 && subjectCount === 0) {
+                await pullFromCloud();
+              } else {
+                await processSyncQueue();
+              }
+            } catch (err) {
+              console.warn("Background sync failed:", err);
+            }
+          };
+          // Fire and forget - don't await
+          backgroundSync();
         } catch (error) {
           console.error("Error fetching user profile:", error);
           setUser(null);

@@ -9,6 +9,7 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   preferences: UserPreferences;
+  _hasHydrated?: boolean;
   
   // Actions
   setUser: (user: User | null) => void;
@@ -60,6 +61,13 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         preferences: state.preferences,
       }),
+      onRehydrateStorage: () => {
+        return (state) => {
+          if (state) {
+            state._hasHydrated = true;
+          }
+        };
+      },
     }
   )
 );

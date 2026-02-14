@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, Sun, Moon, User } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -23,11 +24,16 @@ interface HeaderProps {
 }
 
 export function Header({ className }: HeaderProps) {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const { setMobileNavOpen } = useUIStore();
   const { user, reset } = useAuthStore();
   const router = useRouter();
   const { toast } = useToast();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function handleLogout() {
     try {
@@ -72,10 +78,17 @@ export function Header({ className }: HeaderProps) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
           >
-            <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            {mounted ? (
+              resolvedTheme === "dark" ? (
+                <Moon className="h-5 w-5" />
+              ) : (
+                <Sun className="h-5 w-5" />
+              )
+            ) : (
+              <Sun className="h-5 w-5" />
+            )}
             <span className="sr-only">Toggle theme</span>
           </Button>
 

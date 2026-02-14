@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -30,8 +30,13 @@ import { LoadingSpinner } from "@/components/shared/loading-spinner";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const { user, preferences, updatePreferences, reset } = useAuthStore();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const { toast } = useToast();
 
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
@@ -136,7 +141,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <Switch
-              checked={theme === "dark"}
+              checked={mounted ? resolvedTheme === "dark" : false}
               onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
             />
           </div>
