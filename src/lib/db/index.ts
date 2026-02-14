@@ -71,12 +71,12 @@ class AttendanceDatabase extends Dexie {
         list.push(s);
         byOwner.set(s.ownerId, list);
       }
-      for (const [, list] of byOwner) {
+      byOwner.forEach(async (list) => {
         list.sort((a: { roll: number }, b: { roll: number }) => a.roll - b.roll);
         for (let i = 0; i < list.length; i++) {
           await tx.table("students").update(list[i].id, { sortOrder: i });
         }
-      }
+      });
     });
   }
 }
