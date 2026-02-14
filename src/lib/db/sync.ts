@@ -193,6 +193,7 @@ export async function pullFromCloud(): Promise<PullResult> {
           name: data.name ?? "",
           section: data.section ?? "",
           department: data.department ?? "",
+          sortOrder: data.sortOrder ?? 0,
           createdAt: data.createdAt ?? new Date().toISOString(),
           updatedAt: data.updatedAt ?? new Date().toISOString(),
           isDeleted: data.isDeleted ?? false,
